@@ -139,7 +139,7 @@ ahp_qgis_plugin/
 
 ## Versão e Compatibilidade
 
-- **Versão do Plugin:** 1.0.0
+- **Versão do Plugin:** 1.0.1
 - **QGIS mínimo:** 3.0
 - **Python:** 3.6+
 - **Dependências:** NumPy, PyQt5 (incluídos no QGIS)
