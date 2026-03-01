@@ -2,7 +2,7 @@
 name=AHP Weight Calculator
 qgisMinimumVersion=3.0
 description=Calcula pesos de critérios utilizando o método AHP (Analytic Hierarchy Process). Gera matriz de comparação par a par, calcula pesos, verifica consistência e exporta resultados.
-version=1.0.0
+version=1.0.1
 author=Clayton Igarashi
 email=geoigarashi@gmail.com
 about=Plugin para cálculo de pesos de critérios usando o método de Processo Analítico Hierárquico (AHP). Funcionalidades incluem: definição dinâmica de critérios, preenchimento de matriz de comparação, cálculo automático de pesos, verificação da Razão de Consistência (RC), exportação para CSV e integração com campos de camadas vetoriais do QGIS.
