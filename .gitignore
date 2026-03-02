@@ -1,0 +1,27 @@
+# Claude Code
+CLAUDE.md
+
+# Editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Arquivos temporários
+*.tmp
+*.bak
+*.swp

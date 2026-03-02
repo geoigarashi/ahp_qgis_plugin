@@ -1,5 +1,5 @@
 # Plugin AHP para QGIS
-## Calculadora de Pesos – Analytic Hierarchy Process (AHP)
+> **Calculadora de Pesos – Analytic Hierarchy Process (AHP)**
 
 ---
 
@@ -8,6 +8,26 @@
 O **Processo Analítico Hierárquico (AHP)**, desenvolvido por Thomas L. Saaty (1980),
 é um método de apoio à decisão multicritério que permite estruturar problemas complexos,
 comparar alternativas e calcular pesos para critérios de forma sistemática e consistente.
+
+---
+
+## Telas do Plugin
+
+### 1. Critérios
+Define a quantidade e os nomes dos critérios que serão avaliados.  
+![Aba 1 - Critérios](docs/screenshot_1.png)
+
+### 2. Matriz de Comparação
+Comparação par a par entre os critérios utilizando a escala fundamental de Saaty.  
+![Aba 2 - Matriz de Comparação](docs/screenshot_2.png)
+
+### 3. Resultados
+Visualização dos pesos calculados, verificação da Razão de Consistência (RC) e exportação de dados.  
+![Aba 3 - Resultados](docs/screenshot_3.png)
+
+### 4. Escala Saaty
+Material de referência rápida contendo a escala de intensidade de importância e fórmulas aplicadas.  
+![Aba 4 - Escala Saaty](docs/screenshot_4.png)
 
 ---
 
@@ -104,6 +124,7 @@ ahp_qgis_plugin/
 ├── test_ahp.py        # Testes independentes da lógica AHP
 ├── metadata.txt       # Metadados do plugin QGIS
 ├── icon.png           # Ícone do plugin
+├── docs/              # Capturas de tela e documentação
 └── README.md          # Este arquivo
 ```
 
@@ -118,7 +139,7 @@ ahp_qgis_plugin/
 
 ## Versão e Compatibilidade
 
-- **Versão do Plugin:** 1.0.0
+- **Versão do Plugin:** 1.0.1
 - **QGIS mínimo:** 3.0
 - **Python:** 3.6+
 - **Dependências:** NumPy, PyQt5 (incluídos no QGIS)

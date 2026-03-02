@@ -16,12 +16,79 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor, QFont, QBrush
 
 try:
-    from qgis.core import QgsProject, QgsVectorLayer
+    from qgis.core import QgsProject, QgsVectorLayer, QgsTask
     HAS_QGIS = True
 except ImportError:
     HAS_QGIS = False
 
 from .ahp_core import AHPCalculator, RI_TABLE
+
+
+class AHPExportTask(QgsTask):
+    """
+    QgsTask para adicionar os campos de peso AHP na camada vetorial
+    em background, garantindo thread safety e sem congelar a UI.
+    """
+    def __init__(self, layer_id, fields_to_add, layer_name):
+        super().__init__(f"Exportando Pesos AHP para {layer_name}", QgsTask.CanCancel)
+        self.layer_id = layer_id
+        self.fields_to_add = fields_to_add
+        self.layer_name = layer_name
+        self.exception = None
+        self.added = 0
+
+    def run(self):
+        try:
+            lyr = QgsProject.instance().mapLayer(self.layer_id)
+            if not lyr:
+                raise Exception("Camada não encontrada na pilha de processos.")
+
+            from qgis.core import QgsField
+            from qgis.PyQt.QtCore import QVariant
+
+            lyr.startEditing()
+            for field_data in self.fields_to_add:
+                fname = field_data['name']
+                fval = field_data['value']
+
+                if lyr.fields().indexOf(fname) == -1:
+                    lyr.addAttribute(QgsField(fname, QVariant.Double))
+                    self.added += 1
+
+                    # Preenche features
+                    for feat in lyr.getFeatures():
+                        if self.isCanceled():
+                            lyr.rollBack()
+                            return False
+                        lyr.changeAttributeValue(feat.id(), lyr.fields().indexOf(fname), fval)
+
+            lyr.commitChanges()
+            return True
+
+        except Exception as e:
+            self.exception = e
+            return False
+
+    def finished(self, result):
+        if result:
+            msg = "Pesos adicionados com sucesso."
+            self.taskCompleted.emit(True, self.added, self.layer_name, msg)
+        else:
+            if self.exception:
+                msg = str(self.exception)
+            else:
+                msg = "A tarefa foi cancelada pelo usuário."
+            
+            # Se a task possuir rollback pendente e não commitou
+            lyr = QgsProject.instance().mapLayer(self.layer_id)
+            if lyr and lyr.isEditable():
+                lyr.rollBack()
+
+            self.taskCompleted.emit(False, 0, self.layer_name, msg)
+
+    # Definir sinais de conclusão
+    from qgis.PyQt.QtCore import pyqtSignal
+    taskCompleted = pyqtSignal(bool, int, str, str)
 
 
 class AHPDialog(QDialog):
@@ -108,6 +175,29 @@ class AHPDialog(QDialog):
             btn_layout.addWidget(btn)
 
         main_layout.addLayout(btn_layout)
+
+        # Ler versão do metadata.txt dinamicamente
+        version = "1.0.0"  # fallback
+        try:
+            import configparser
+            plugin_dir = os.path.dirname(__file__)
+            metadata_path = os.path.join(plugin_dir, "metadata.txt")
+            if os.path.exists(metadata_path):
+                config = configparser.ConfigParser()
+                config.read(metadata_path, encoding='utf-8')
+                if config.has_option('general', 'version'):
+                    version = config.get('general', 'version')
+        except Exception:
+            pass
+
+        # Rodapé padronizado
+        lbl_footer = QLabel(
+            f"Calculadora AHP v{version}  |  Clayton Igarashi "
+            "<geoigarashi@gmail.com>"
+        )
+        lbl_footer.setAlignment(Qt.AlignCenter)
+        lbl_footer.setStyleSheet("color: gray; font-size: 10px;")
+        main_layout.addWidget(lbl_footer)
 
     def _build_header(self):
         frame = QFrame()
@@ -602,40 +692,97 @@ class AHPDialog(QDialog):
     def _on_add_to_layer(self):
         """Adiciona campos de peso à camada vetorial selecionada."""
         if self.last_results is None:
-            QMessageBox.warning(self, "Atenção", "Calcule os pesos primeiro.")
+            self._show_message("Atenção", "Calcule os pesos primeiro.", level="warning")
             return
         if not HAS_QGIS:
             return
 
         layer_id = self.combo_layer.currentData()
         if not layer_id:
-            QMessageBox.warning(self, "Atenção", "Selecione uma camada vetorial.")
+            self._show_message("Atenção", "Selecione uma camada vetorial.", level="warning")
             return
 
         lyr = QgsProject.instance().mapLayer(layer_id)
         if not lyr:
-            QMessageBox.warning(self, "Erro", "Camada não encontrada.")
+            self._show_message("Erro", "Camada não encontrada.", level="critical")
             return
 
+<<<<<<< HEAD
         from qgis.core import QgsField
         from qgis.PyQt.QtCore import QVariant
+=======
+        from qgis.core import QgsApplication, QgsTask
+>>>>>>> f12f628af3a7da68a86216b52feb29c94d4270f5
 
-        lyr.startEditing()
-        added = 0
+        # Prepara dados para a task
+        fields_to_add = []
         for crit, w in zip(self.last_results['criteria'], self.last_results['weights']):
             fname = f"ahp_{crit[:10].replace(' ', '_').lower()}"
-            if lyr.fields().indexOf(fname) == -1:
-                lyr.addAttribute(QgsField(fname, QVariant.Double))
-                added += 1
-                # Preencher todos os features com o peso
-                for feat in lyr.getFeatures():
-                    lyr.changeAttributeValue(feat.id(), lyr.fields().indexOf(fname), float(w))
+            fields_to_add.append({'name': fname, 'value': float(w)})
 
-        lyr.commitChanges()
-        QMessageBox.information(
-            self, "Campos Adicionados",
-            f"{added} campo(s) de peso AHP adicionado(s) à camada '{lyr.name()}'."
+        # Inicia a Task para não travar a UI principal
+        task = AHPExportTask(
+            layer_id=layer_id,
+            fields_to_add=fields_to_add,
+            layer_name=lyr.name()
         )
+        task.taskCompleted.connect(self._on_export_task_completed)
+        task.taskTerminated.connect(self._on_export_task_terminated)
+        
+        QgsApplication.taskManager().addTask(task)
+        self._log_message(f"Iniciada a gravação de pesos na camada: {lyr.name()}")
+
+    def _on_export_task_completed(self, success, added_count, layer_name, msg):
+        """Slot chamado quando a QgsTask finaliza."""
+        if success:
+            self._show_message(
+                "Sucesso",
+                f"{added_count} campo(s) de peso AHP adicionado(s) à camada '{layer_name}'.",
+                level="success"
+            )
+            self._log_message(f"Pesos adicionados com sucesso na camada '{layer_name}'.")
+        else:
+            self._show_message("Erro", f"Erro na escrita: {msg}", level="critical")
+            self._log_message(f"Falha ao escrever na camada '{layer_name}': {msg}", level="critical")
+
+    def _on_export_task_terminated(self):
+        """Slot chamado caso a QgsTask falhe inesperadamente."""
+        self._show_message("Erro", "A tarefa de exportação falhou ou foi cancelada.", level="critical")
+        self._log_message("Tarefa de exportação cancelada/falha.", level="critical")
+
+    def _show_message(self, title, message, level="info"):
+        """Mostra notificações usando a MessageBar do QGIS quando disponível."""
+        if HAS_QGIS and self.iface:
+            from qgis.core import Qgis
+            qgis_level = Qgis.MessageLevel.Info
+            if level == "warning":
+                qgis_level = Qgis.MessageLevel.Warning
+            elif level == "critical":
+                qgis_level = Qgis.MessageLevel.Critical
+            elif level == "success":
+                qgis_level = Qgis.MessageLevel.Success
+            
+            self.iface.messageBar().pushMessage(title, message, level=qgis_level, duration=5)
+        else:
+            # Fallback seguro caso não esteja rodando dentro do QGIS
+            if level == "warning":
+                QMessageBox.warning(self, title, message)
+            elif level == "critical":
+                QMessageBox.critical(self, title, message)
+            else:
+                QMessageBox.information(self, title, message)
+
+    def _log_message(self, message, level="info"):
+        """Registra no painel Log de Mensagens do QGIS."""
+        if HAS_QGIS:
+            from qgis.core import QgsMessageLog, Qgis
+            qgis_level = Qgis.MessageLevel.Info
+            if level == "warning":
+                qgis_level = Qgis.MessageLevel.Warning
+            elif level == "critical":
+                qgis_level = Qgis.MessageLevel.Critical
+            
+            QgsMessageLog.logMessage(message, "AHP Plugin", level=qgis_level)
 
     # ──────────────────────────────────────────────
     # RESET
