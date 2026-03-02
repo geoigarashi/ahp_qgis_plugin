@@ -1,5 +1,6 @@
 # Plugin AHP para QGIS
 > **Calculadora de Pesos – Analytic Hierarchy Process (AHP)**
+> Versão 1.1.0 · Clayton Igarashi
 
 ---
 
@@ -9,25 +10,33 @@ O **Processo Analítico Hierárquico (AHP)**, desenvolvido por Thomas L. Saaty (
 é um método de apoio à decisão multicritério que permite estruturar problemas complexos,
 comparar alternativas e calcular pesos para critérios de forma sistemática e consistente.
 
+No **Geoprocessamento**, os pesos AHP são aplicados a camadas raster normalizadas para
+gerar mapas de aptidão, vulnerabilidade, risco ou qualquer índice espacial composto.
+
 ---
 
 ## Telas do Plugin
 
 ### 1. Critérios
-Define a quantidade e os nomes dos critérios que serão avaliados.  
+Define a quantidade e os nomes dos critérios que serão avaliados.
 ![Aba 1 - Critérios](docs/screenshot_1.png)
 
 ### 2. Matriz de Comparação
-Comparação par a par entre os critérios utilizando a escala fundamental de Saaty.  
+Comparação par a par entre os critérios utilizando a escala fundamental de Saaty.
 ![Aba 2 - Matriz de Comparação](docs/screenshot_2.png)
 
 ### 3. Resultados
-Visualização dos pesos calculados, verificação da Razão de Consistência (RC) e exportação de dados.  
+Visualização dos pesos calculados, verificação da Razão de Consistência (RC),
+fórmula automática para a Calculadora Raster e exportação de dados.
 ![Aba 3 - Resultados](docs/screenshot_3.png)
 
 ### 4. Escala Saaty
-Material de referência rápida contendo a escala de intensidade de importância e fórmulas aplicadas.  
+Material de referência rápida com a escala de intensidade de importância e fórmulas.
 ![Aba 4 - Escala Saaty](docs/screenshot_4.png)
+
+### 5. Guia Prático *(novo em v1.1.0)*
+Documentação integrada com fluxo de trabalho AHP-GIS, normalização de rasters,
+uso da Calculadora Raster, interpretação do mapa resultado e referências bibliográficas.
 
 ---
 
@@ -37,7 +46,7 @@ Material de referência rápida contendo a escala de intensidade de importância
 1. Abra o QGIS
 2. Menu **Complementos → Gerenciar e Instalar Complementos**
 3. Clique em **Instalar a partir de um ZIP**
-4. Selecione o arquivo `ahp_qgis_plugin.zip`
+4. Selecione o arquivo `ahp_qgis_plugin_v1.1.0.zip`
 5. Clique em **Instalar**
 
 ### Método 2 – Manual
@@ -63,6 +72,7 @@ pip install numpy
 - Informe a **quantidade de critérios** (2 a 15)
 - Preencha os **nomes** de cada critério
 - Clique em **Gerar Matriz de Comparação**
+- Os critérios e configurações são **salvos automaticamente** entre sessões
 
 ### Passo 2 – Preencher a Matriz
 - Para cada par de critérios, selecione o valor na **Escala Saaty** (1 a 9)
@@ -81,12 +91,26 @@ pip install numpy
 ### Passo 3 – Calcular e Verificar
 - Clique em **⚡ Calcular Pesos**
 - Verifique a **Razão de Consistência (RC)**:
-  - RC < 0.10 → Matriz **consistente** ✔
-  - RC ≥ 0.10 → Revisão necessária ✘
+  - RC < 0.05 → Excelente consistência ✔
+  - RC 0.05–0.10 → Consistência aceitável ✔
+  - RC ≥ 0.10 → Revisão recomendada ✘
 
-### Passo 4 – Exportar
+### Passo 4 – Aplicar na Calculadora Raster *(novo em v1.1.0)*
+Na aba **Resultados**, a fórmula ponderada é gerada automaticamente:
+```
+(0.6479 * "declividade@1") +
+(0.2299 * "uso_solo@1") +
+(0.1222 * "hidrologia@1")
+```
+- Clique em **📋 Copiar Fórmula** e cole diretamente na **Calculadora Raster do QGIS**
+  (Menu: Raster → Calculadora Raster)
+- Certifique-se de que os rasters estão normalizados na mesma escala antes de aplicar os pesos
+- Consulte a aba **📋 Guia Prático** para orientações sobre normalização e interpretação
+
+### Passo 5 – Exportar
 - **💾 Exportar CSV**: salva pesos e matriz em arquivo `.csv`
 - **Exportar para Camada QGIS**: adiciona campos de peso em uma camada vetorial
+  (solicita confirmação e avisa se RC ≥ 0.10)
 
 ---
 
@@ -130,16 +154,45 @@ ahp_qgis_plugin/
 
 ---
 
-## Referência
+## Histórico de Versões
 
-> Saaty, T.L. (1980). *The Analytic Hierarchy Process*.
-> McGraw-Hill, New York.
+### v1.1.0 (2026-03-02)
+**Novas funcionalidades:**
+- Aba **📋 Guia Prático** com 8 seções: conceito AHP, fluxo de trabalho AHP-GIS,
+  dicas de preenchimento da matriz, tabela de interpretação da RC, métodos de
+  normalização de rasters, uso da Calculadora Raster, interpretação do mapa e referências
+- **Fórmula automática para Calculadora Raster** na aba Resultados — gera a expressão
+  ponderada com os nomes e pesos calculados, com botão **📋 Copiar Fórmula**
+- **QSettings**: critérios, quantidade e valores da matriz são restaurados entre sessões
+- Confirmação antes de adicionar campos em camada vetorial
+- Aviso ao exportar matriz inconsistente (RC ≥ 0.10) com opção de cancelar
+
+**Correções críticas:**
+- Resolve merge conflict em `ahp_dialog.py` que impedia carregamento do plugin
+- Adiciona `import os` ausente (necessário para leitura da versão no rodapé)
+- Move `pyqtSignal` para nível de módulo; renomeia `taskCompleted` → `export_completed`
+  para evitar conflito com o sinal nativo de `QgsTask`
+- `test_ahp.py`: importa `AHPCalculator` de `ahp_core` em vez de duplicar a lógica
+- `metadata.txt`: `category` corrigido de `Raster` para `Analysis`;
+  `qgisMinimumVersion` atualizado de `3.0` para `3.16`
+- `matrix_combos` agora é limpo corretamente ao reiniciar
+
+### v1.0.1
+- Release inicial pública
+
+---
+
+## Referências
+
+> Saaty, T.L. (1980). *The Analytic Hierarchy Process*. McGraw-Hill, New York.
+> Saaty, T.L. (1990). How to make a decision: The Analytic Hierarchy Process.
+> *European Journal of Operational Research*, 48(1), 9–26.
 
 ---
 
 ## Versão e Compatibilidade
 
-- **Versão do Plugin:** 1.0.1
-- **QGIS mínimo:** 3.0
+- **Versão do Plugin:** 1.1.0
+- **QGIS mínimo:** 3.16
 - **Python:** 3.6+
 - **Dependências:** NumPy, PyQt5 (incluídos no QGIS)

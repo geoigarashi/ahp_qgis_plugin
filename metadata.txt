@@ -1,16 +1,16 @@
 [general]
 name=AHP Weight Calculator
-qgisMinimumVersion=3.0
+qgisMinimumVersion=3.16
 description=Calcula pesos de critérios utilizando o método AHP (Analytic Hierarchy Process). Gera matriz de comparação par a par, calcula pesos, verifica consistência e exporta resultados.
-version=1.0.1
+version=1.1.0
 author=Clayton Igarashi
 email=geoigarashi@gmail.com
-about=Plugin para cálculo de pesos de critérios usando o método de Processo Analítico Hierárquico (AHP). Funcionalidades incluem: definição dinâmica de critérios, preenchimento de matriz de comparação, cálculo automático de pesos, verificação da Razão de Consistência (RC), exportação para CSV e integração com campos de camadas vetoriais do QGIS.
+about=Plugin para cálculo de pesos de critérios usando o método de Processo Analítico Hierárquico (AHP). Funcionalidades: definição dinâmica de critérios (2–15), matriz de comparação par a par com escala Saaty, cálculo de pesos via autovetor, verificação da Razão de Consistência (RC), exportação para CSV e camadas vetoriais QGIS. v1.1.0: guia prático de uso pós-cálculo (normalização de rasters, fluxo AHP-GIS, interpretação do mapa), geração automática da fórmula para Calculadora Raster com botão de cópia, persistência de configurações entre sessões (QSettings) e correções críticas de estabilidade.
 repository=https://github.com/geoigarashi/ahp_qgis_plugin.git
 hasProcessingProvider=no
 tags=AHP, pesos, multicritério, análise espacial, MCDA
 homepage=https://github.com/geoigarashi/ahp_qgis_plugin
-category=Raster
+category=Analysis
 icon=icon.png
 experimental=False
 deprecated=False

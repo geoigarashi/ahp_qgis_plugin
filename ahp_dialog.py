@@ -4,15 +4,17 @@ Diálogo principal do Plugin AHP para QGIS
 Interface gráfica completa para cálculo de pesos AHP
 """
 import csv
+import json
+import os
 
 from qgis.PyQt.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
     QTextEdit, QSpinBox, QTabWidget, QWidget, QGroupBox,
     QComboBox, QMessageBox, QFileDialog, QHeaderView,
-    QSplitter, QFrame
+    QSplitter, QFrame, QScrollArea, QApplication
 )
-from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtCore import Qt, pyqtSignal, QSettings
 from qgis.PyQt.QtGui import QColor, QFont, QBrush
 
 try:
@@ -72,7 +74,7 @@ class AHPExportTask(QgsTask):
     def finished(self, result):
         if result:
             msg = "Pesos adicionados com sucesso."
-            self.taskCompleted.emit(True, self.added, self.layer_name, msg)
+            self.export_completed.emit(True, self.added, self.layer_name, msg)
         else:
             if self.exception:
                 msg = str(self.exception)
@@ -84,11 +86,10 @@ class AHPExportTask(QgsTask):
             if lyr and lyr.isEditable():
                 lyr.rollBack()
 
-            self.taskCompleted.emit(False, 0, self.layer_name, msg)
+            self.export_completed.emit(False, 0, self.layer_name, msg)
 
-    # Definir sinais de conclusão
-    from qgis.PyQt.QtCore import pyqtSignal
-    taskCompleted = pyqtSignal(bool, int, str, str)
+    # Sinal de conclusão da exportação
+    export_completed = pyqtSignal(bool, int, str, str)
 
 
 class AHPDialog(QDialog):
@@ -127,6 +128,7 @@ class AHPDialog(QDialog):
 
         self._build_ui()
         self._apply_styles()
+        self._load_settings()
 
     # ──────────────────────────────────────────────
     # UI BUILDER
@@ -147,6 +149,7 @@ class AHPDialog(QDialog):
         self.tabs.addTab(self._build_tab_matrix(), "2. Matriz de Comparação")
         self.tabs.addTab(self._build_tab_results(), "3. Resultados")
         self.tabs.addTab(self._build_tab_reference(), "📖 Escala Saaty")
+        self.tabs.addTab(self._build_tab_guide(), "📋 Guia Prático")
         main_layout.addWidget(self.tabs)
 
         # Bottom buttons
@@ -328,6 +331,35 @@ class AHPDialog(QDialog):
 
         splitter.setSizes([250, 350])
         layout.addWidget(splitter)
+
+        # Fórmula para Calculadora Raster
+        formula_group = QGroupBox("Fórmula para a Calculadora Raster do QGIS")
+        formula_layout = QVBoxLayout(formula_group)
+
+        formula_info = QLabel(
+            "Copie a expressão abaixo e cole na Calculadora Raster "
+            "(Raster → Calculadora Raster). Cada raster deve estar "
+            "normalizado na mesma escala antes de aplicar os pesos."
+        )
+        formula_info.setWordWrap(True)
+        formula_layout.addWidget(formula_info)
+
+        self.formula_text = QTextEdit()
+        self.formula_text.setReadOnly(True)
+        self.formula_text.setFont(QFont("Courier New", 9))
+        self.formula_text.setMaximumHeight(90)
+        self.formula_text.setPlaceholderText(
+            "A fórmula será gerada automaticamente após o cálculo dos pesos..."
+        )
+        formula_layout.addWidget(self.formula_text)
+
+        btn_copy = QPushButton("📋 Copiar Fórmula")
+        btn_copy.setObjectName("btn_secondary")
+        btn_copy.setMaximumWidth(160)
+        btn_copy.clicked.connect(self._on_copy_formula)
+        formula_layout.addWidget(btn_copy)
+
+        layout.addWidget(formula_group)
 
         # QGIS Layer integration
         if HAS_QGIS and self.iface:
@@ -619,6 +651,13 @@ class AHPDialog(QDialog):
 
         self.results_text.setPlainText(text)
 
+        # Gerar fórmula para Calculadora Raster
+        formula_parts = []
+        for crit, w in zip(criteria, weights):
+            layer_name = crit.lower().replace(" ", "_").replace("-", "_")
+            formula_parts.append(f'({w:.4f} * "{layer_name}@1")')
+        self.formula_text.setPlainText(" +\n".join(formula_parts))
+
     # ──────────────────────────────────────────────
     # EXPORT
     # ──────────────────────────────────────────────
@@ -707,12 +746,32 @@ class AHPDialog(QDialog):
             self._show_message("Erro", "Camada não encontrada.", level="critical")
             return
 
-<<<<<<< HEAD
-        from qgis.core import QgsField
-        from qgis.PyQt.QtCore import QVariant
-=======
-        from qgis.core import QgsApplication, QgsTask
->>>>>>> f12f628af3a7da68a86216b52feb29c94d4270f5
+        # Aviso se matriz inconsistente
+        if not self.last_results['is_consistent']:
+            reply = QMessageBox.warning(
+                self, "⚠ Matriz Inconsistente",
+                f"A Razão de Consistência (RC = {self.last_results['rc']:.4f}) "
+                "é maior que 0.10.\n\n"
+                "Recomenda-se revisar as comparações antes de exportar.\n\n"
+                "Deseja exportar mesmo assim?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                return
+
+        # Confirmação antes de modificar a camada
+        reply = QMessageBox.question(
+            self, "Confirmar Exportação",
+            f"Adicionar campos de peso AHP à camada '{lyr.name()}'?\n\n"
+            "Esta ação modifica a tabela de atributos da camada.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes
+        )
+        if reply == QMessageBox.No:
+            return
+
+        from qgis.core import QgsApplication
 
         # Prepara dados para a task
         fields_to_add = []
@@ -726,7 +785,7 @@ class AHPDialog(QDialog):
             fields_to_add=fields_to_add,
             layer_name=lyr.name()
         )
-        task.taskCompleted.connect(self._on_export_task_completed)
+        task.export_completed.connect(self._on_export_task_completed)
         task.taskTerminated.connect(self._on_export_task_terminated)
         
         QgsApplication.taskManager().addTask(task)
@@ -798,6 +857,7 @@ class AHPDialog(QDialog):
             self.criteria = []
             self.calculator = None
             self.last_results = None
+            self.matrix_combos = {}
             self.btn_calculate.setEnabled(False)
             self.btn_export.setEnabled(False)
             self._generate_criteria_fields(self.spin_num.value())
@@ -806,6 +866,247 @@ class AHPDialog(QDialog):
             self.weights_table.setRowCount(0)
             self.results_text.clear()
             self.tabs.setCurrentIndex(0)
+
+    # ──────────────────────────────────────────────
+    # COPY FORMULA
+    # ──────────────────────────────────────────────
+
+    def _on_copy_formula(self):
+        """Copia a fórmula da Calculadora Raster para a área de transferência."""
+        formula = self.formula_text.toPlainText().strip()
+        if not formula:
+            QMessageBox.information(
+                self, "Atenção", "Calcule os pesos primeiro para gerar a fórmula."
+            )
+            return
+        QApplication.clipboard().setText(formula)
+        QMessageBox.information(
+            self, "Copiado",
+            "Fórmula copiada! Cole-a na Calculadora Raster do QGIS\n"
+            "(Raster → Calculadora Raster)."
+        )
+
+    # ──────────────────────────────────────────────
+    # GUIDE TAB
+    # ──────────────────────────────────────────────
+
+    def _build_tab_guide(self):
+        """Aba: Guia Prático de uso pós-cálculo."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        def section(title, html_body):
+            grp = QGroupBox(title)
+            grp.setObjectName("guide_group")
+            lbl = QLabel(html_body)
+            lbl.setWordWrap(True)
+            lbl.setTextFormat(Qt.RichText)
+            lbl.setOpenExternalLinks(False)
+            inner = QVBoxLayout(grp)
+            inner.addWidget(lbl)
+            return grp
+
+        # ── 1. O que é o AHP? ─────────────────────────────────────────────
+        layout.addWidget(section(
+            "🔢  O que é o Método AHP?",
+            "O <b>Analytic Hierarchy Process (AHP)</b>, proposto por Thomas L. Saaty (1980), "
+            "é um método de tomada de decisão multicritério que transforma julgamentos "
+            "subjetivos de importância relativa em <b>pesos numéricos</b> que somam 1,0 (100%).<br><br>"
+            "No contexto do <b>Geoprocessamento</b>, esses pesos são aplicados a camadas "
+            "raster representando diferentes variáveis espaciais — gerando mapas de "
+            "aptidão, vulnerabilidade, risco ou qualquer índice composto."
+        ))
+
+        # ── 2. Fluxo de trabalho ──────────────────────────────────────────
+        layout.addWidget(section(
+            "🗺️  Fluxo de Trabalho AHP-GIS",
+            "<ol>"
+            "<li><b>Definir o objetivo</b>: Ex.: mapa de risco de deslizamento, aptidão agrícola.</li>"
+            "<li><b>Listar critérios</b>: Variáveis espaciais que influenciam o fenômeno "
+            "(declividade, uso do solo, geologia, distância a drenagens…).</li>"
+            "<li><b>Preparar os rasters</b>: Normalizar cada camada para uma escala comum "
+            "(ex.: 0–1 ou 1–5) antes de aplicar os pesos.</li>"
+            "<li><b>Calcular pesos no AHP</b>: Preencher a matriz de comparação e verificar RC.</li>"
+            "<li><b>Aplicar na Calculadora Raster</b>: Usar a fórmula gerada na aba Resultados.</li>"
+            "<li><b>Interpretar e validar</b>: Comparar o mapa com dados de campo ou amostras.</li>"
+            "</ol>"
+        ))
+
+        # ── 3. Como preencher a matriz ────────────────────────────────────
+        layout.addWidget(section(
+            "✏️  Como Preencher a Matriz de Comparação",
+            "Para cada par de critérios (linha A vs coluna B), responda:<br>"
+            "<i>\"Quanto A é mais importante que B para atingir o objetivo?\"</i><br><br>"
+            "<b>Dicas práticas:</b>"
+            "<ul>"
+            "<li>Comece comparando os pares mais óbvios (os extremos de importância).</li>"
+            "<li>Mantenha consistência transitiva: se <b>A &gt; B</b> e <b>B &gt; C</b>, "
+            "então A deve ser claramente mais importante que C.</li>"
+            "<li>Evite usar os valores extremos (9) em muitos pares — isso tende a gerar "
+            "alta inconsistência.</li>"
+            "<li>Se a RC ultrapassar 0,10, revise primeiro os julgamentos mais intensos "
+            "(valores 7, 8 ou 9) e tente suavizá-los.</li>"
+            "<li>Com mais de 7 critérios, a manutenção da consistência torna-se "
+            "progressivamente mais difícil.</li>"
+            "</ul>"
+        ))
+
+        # ── 4. Razão de Consistência ──────────────────────────────────────
+        layout.addWidget(section(
+            "📐  Interpretando a Razão de Consistência (RC)",
+            "<table cellspacing='6'>"
+            "<tr><th align='left'>RC</th><th align='left'>Interpretação</th>"
+            "<th align='left'>Ação</th></tr>"
+            "<tr><td><b>&lt; 0,05</b></td><td>Excelente consistência</td>"
+            "<td>Prossiga com confiança.</td></tr>"
+            "<tr><td><b>0,05 – 0,10</b></td><td>Consistência aceitável</td>"
+            "<td>Resultados válidos; revisão opcional.</td></tr>"
+            "<tr><td><b>0,10 – 0,20</b></td><td>Consistência limítrofe</td>"
+            "<td>Recomenda-se revisar os julgamentos.</td></tr>"
+            "<tr><td><b>&gt; 0,20</b></td><td>Inconsistência elevada</td>"
+            "<td>Revisar antes de usar os pesos.</td></tr>"
+            "</table>"
+        ))
+
+        # ── 5. Normalização dos rasters ───────────────────────────────────
+        layout.addWidget(section(
+            "🔲  Normalização dos Rasters (pré-requisito)",
+            "Antes de aplicar os pesos AHP, todos os rasters devem estar na "
+            "<b>mesma escala de valores</b>. Métodos comuns:<br><br>"
+            "<b>1. Normalização linear (min-max), escala 0–1:</b><br>"
+            "<code>&nbsp;&nbsp;(\"raster@1\" - mínimo) / (máximo - mínimo)</code><br><br>"
+            "<b>2. Reclassificação por faixas (1–5 ou 1–9):</b><br>"
+            "Atribua notas de 1 a 5 (ou 1 a 9) a faixas de valores usando "
+            "<i>Raster → Reclassificação</i>. Valores maiores devem indicar "
+            "maior intensidade do fator analisado.<br><br>"
+            "<b>3. Fuzzy membership:</b><br>"
+            "Transforma valores em graus de pertinência (0–1) usando funções "
+            "lineares, sigmoidal ou gaussiana — mais indicado quando os limites "
+            "entre classes são gradientes, não cortes abruptos."
+        ))
+
+        # ── 6. Usando a fórmula na Calculadora Raster ─────────────────────
+        layout.addWidget(section(
+            "🧮  Usando a Fórmula na Calculadora Raster do QGIS",
+            "Após calcular os pesos, vá à aba <b>3. Resultados</b> e copie a "
+            "fórmula gerada automaticamente.<br><br>"
+            "<b>Passos no QGIS:</b>"
+            "<ol>"
+            "<li>Menu <b>Raster → Calculadora Raster…</b></li>"
+            "<li>Cole a fórmula no campo de expressão.</li>"
+            "<li>Certifique-se de que os nomes das camadas na fórmula correspondem "
+            "exatamente aos nomes das camadas carregadas no QGIS.</li>"
+            "<li>Defina o arquivo de saída e a extensão/resolução de referência.</li>"
+            "<li>Clique em <b>OK</b> para gerar o mapa.</li>"
+            "</ol>"
+            "<b>Exemplo (3 critérios):</b><br>"
+            "<code>"
+            "(0.6479 * \"declividade@1\") +<br>"
+            "(0.2299 * \"uso_solo@1\") +<br>"
+            "(0.1222 * \"hidrologia@1\")"
+            "</code><br><br>"
+            "⚠️ <i>O sufixo <b>@1</b> indica a banda 1 do raster. "
+            "Ajuste para <b>@2</b>, <b>@3</b>… se o dado estiver em outra banda.</i>"
+        ))
+
+        # ── 7. Interpretação do mapa resultante ───────────────────────────
+        layout.addWidget(section(
+            "🗺️  Interpretando o Mapa Resultante",
+            "<b>O que o mapa representa?</b><br>"
+            "Cada pixel recebe um valor igual à <i>soma ponderada</i> dos valores "
+            "dos rasters de entrada. O resultado é um índice contínuo — quanto maior "
+            "o valor, maior a intensidade do fenômeno modelado.<br><br>"
+            "<b>Faixa de valores:</b><br>"
+            "Depende da escala de normalização escolhida:<br>"
+            "• Rasters 0–1 → resultado entre 0 e 1<br>"
+            "• Rasters 1–5 → resultado entre 1 e 5<br><br>"
+            "<b>Classificação do resultado:</b><br>"
+            "Aplique <i>Raster → Reclassificação</i> ou use simbologia por intervalos "
+            "para criar classes (ex.: muito baixo / baixo / médio / alto / muito alto).<br><br>"
+            "<b>Validação:</b><br>"
+            "Compare o mapa com pontos de ocorrência conhecidos "
+            "(ex.: histórico de deslizamentos, amostras de campo) para avaliar a "
+            "qualidade do modelo antes de usá-lo para tomada de decisão."
+        ))
+
+        # ── 8. Referência ─────────────────────────────────────────────────
+        layout.addWidget(section(
+            "📚  Referências",
+            "• Saaty, T.L. (1980). <i>The Analytic Hierarchy Process.</i> McGraw-Hill.<br>"
+            "• Saaty, T.L. (1990). How to make a decision: The Analytic Hierarchy Process. "
+            "<i>European Journal of Operational Research</i>, 48(1), 9–26.<br>"
+            "• Eastman, J.R. (2006). <i>IDRISI Andes Guide to GIS and Image Processing.</i> "
+            "Clark Labs."
+        ))
+
+        layout.addStretch()
+        scroll.setWidget(container)
+        return scroll
+
+    # ──────────────────────────────────────────────
+    # SETTINGS PERSISTENCE
+    # ──────────────────────────────────────────────
+
+    def _save_settings(self):
+        """Persiste critérios e valores da matriz no QSettings."""
+        s = QSettings("AHPPlugin", "AHPDialog")
+        s.setValue("criteria_count", self.spin_num.value())
+        names = [inp.text() for inp in self.criteria_inputs]
+        s.setValue("criteria_names", json.dumps(names))
+        if self.matrix_combos:
+            combo_vals = {
+                f"{i},{j}": combo.currentIndex()
+                for (i, j), combo in self.matrix_combos.items()
+            }
+            s.setValue("matrix_combos", json.dumps(combo_vals))
+        else:
+            s.remove("matrix_combos")
+
+    def _load_settings(self):
+        """Restaura critérios e matriz do QSettings."""
+        s = QSettings("AHPPlugin", "AHPDialog")
+
+        count = s.value("criteria_count", 4, type=int)
+        self.spin_num.setValue(count)
+        self._generate_criteria_fields(count)
+
+        names_json = s.value("criteria_names", "[]")
+        try:
+            names = json.loads(names_json)
+            for i, inp in enumerate(self.criteria_inputs):
+                if i < len(names) and names[i]:
+                    inp.setText(names[i])
+        except Exception:
+            pass
+
+        # Restaura matriz se os critérios estiverem completos e únicos
+        combo_json = s.value("matrix_combos", "{}")
+        try:
+            combo_vals = json.loads(combo_json)
+            if combo_vals:
+                names_filled = [inp.text().strip() for inp in self.criteria_inputs]
+                if all(names_filled) and len(set(names_filled)) == len(names_filled):
+                    self.criteria = names_filled
+                    self.calculator = AHPCalculator(self.criteria)
+                    self._build_matrix_table()
+                    self.btn_calculate.setEnabled(True)
+                    for key, idx in combo_vals.items():
+                        parts = key.split(",")
+                        i, j = int(parts[0]), int(parts[1])
+                        if (i, j) in self.matrix_combos:
+                            self.matrix_combos[(i, j)].setCurrentIndex(idx)
+        except Exception:
+            pass
+
+    def closeEvent(self, event):
+        """Salva configurações ao fechar o diálogo."""
+        self._save_settings()
+        super().closeEvent(event)
 
     # ──────────────────────────────────────────────
     # STYLES

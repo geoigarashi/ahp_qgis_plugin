@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Teste standalone da lógica AHP (sem QGIS).
+Testes standalone da lógica AHP (sem QGIS).
 Execute com: python3 test_ahp.py
 """
 import sys
@@ -9,48 +9,9 @@ import os
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-# Importar apenas o núcleo (sem dependências QGIS)
-import numpy as np
+from ahp_core import AHPCalculator
 
-# ─── Copiar inline para teste sem dependência de módulo ───────────────────────
-
-RI_TABLE = {
-    1: 0.00, 2: 0.00, 3: 0.58, 4: 0.90, 5: 1.12,
-    6: 1.24, 7: 1.32, 8: 1.41, 9: 1.45, 10: 1.49
-}
-
-class AHPCalculator:
-    def __init__(self, criteria):
-        self.criteria = criteria
-        self.n = len(criteria)
-        self.matrix = np.ones((self.n, self.n))
-
-    def set_comparison(self, i, j, value):
-        self.matrix[i][j] = value
-        self.matrix[j][i] = 1.0 / value
-
-    def calculate_weights(self):
-        col_sums = self.matrix.sum(axis=0)
-        normalized = self.matrix / col_sums
-        weights = normalized.mean(axis=1)
-        weighted_sum = self.matrix.dot(weights)
-        ratio = weighted_sum / weights
-        lambda_max = ratio.mean()
-        ic = (lambda_max - self.n) / (self.n - 1) if self.n > 1 else 0
-        ri = RI_TABLE.get(self.n, 1.59)
-        rc = ic / ri if ri > 0 else 0
-        return {
-            'weights': weights,
-            'criteria': self.criteria,
-            'lambda_max': lambda_max,
-            'ic': ic,
-            'ri': ri,
-            'rc': rc,
-            'is_consistent': rc < 0.10,
-            'n': self.n
-        }
-
-# ─── Teste com exemplo clássico de Saaty ─────────────────────────────────────
+# ─── Teste 1: Exemplo clássico de Saaty ──────────────────────────────────────
 
 print("=" * 60)
 print("  TESTE AHP - Exemplo Clássico (Saaty, 1980)")
@@ -93,6 +54,8 @@ if results['is_consistent']:
 else:
     print("\n✘  MATRIZ INCONSISTENTE (RC ≥ 0.10)")
 
+# ─── Teste 2: Apenas 3 critérios ─────────────────────────────────────────────
+
 print("\n" + "=" * 60)
 print("  TESTE 2 – Apenas 3 critérios")
 print("=" * 60)
@@ -108,5 +71,17 @@ print("\nPESOS:")
 for crit, w in zip(res2['criteria'], res2['weights']):
     print(f"  {crit:<15}: {w:.4f} ({w*100:.2f}%)")
 print(f"RC = {res2['rc']:.4f} → {'Consistente ✔' if res2['is_consistent'] else 'Inconsistente ✘'}")
+
+# ─── Teste 3: Validação de matriz ─────────────────────────────────────────────
+
+print("\n" + "=" * 60)
+print("  TESTE 3 – Validação de matriz")
+print("=" * 60)
+
+ahp3 = AHPCalculator(["A", "B"])
+ahp3.set_comparison(0, 1, 3)
+valid, msg = ahp3.validate_matrix()
+assert valid, f"Esperava matriz válida: {msg}"
+print(f"  Validação OK: {msg}")
 
 print("\n✅ Todos os testes concluídos com sucesso!")
