@@ -3,7 +3,7 @@
 Classe principal do Plugin AHP para QGIS
 """
 import os
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
+from qgis.PyQt.QtWidgets import QAction
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtCore import QCoreApplication
 

@@ -3,7 +3,6 @@
 Diálogo principal do Plugin AHP para QGIS
 Interface gráfica completa para cálculo de pesos AHP
 """
-import os
 import csv
 
 from qgis.PyQt.QtWidgets import (
@@ -11,10 +10,10 @@ from qgis.PyQt.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QTableWidget, QTableWidgetItem,
     QTextEdit, QSpinBox, QTabWidget, QWidget, QGroupBox,
     QComboBox, QMessageBox, QFileDialog, QHeaderView,
-    QDoubleSpinBox, QSizePolicy, QSplitter, QFrame
+    QSplitter, QFrame
 )
-from qgis.PyQt.QtCore import Qt, QSize
-from qgis.PyQt.QtGui import QColor, QFont, QPalette, QBrush
+from qgis.PyQt.QtCore import Qt
+from qgis.PyQt.QtGui import QColor, QFont, QBrush
 
 try:
     from qgis.core import QgsProject, QgsVectorLayer
@@ -22,7 +21,7 @@ try:
 except ImportError:
     HAS_QGIS = False
 
-from .ahp_core import AHPCalculator, SAATY_SCALE, RI_TABLE
+from .ahp_core import AHPCalculator, RI_TABLE
 
 
 class AHPDialog(QDialog):
@@ -618,7 +617,7 @@ class AHPDialog(QDialog):
             QMessageBox.warning(self, "Erro", "Camada não encontrada.")
             return
 
-        from qgis.core import QgsField, QgsFields
+        from qgis.core import QgsField
         from qgis.PyQt.QtCore import QVariant
 
         lyr.startEditing()
