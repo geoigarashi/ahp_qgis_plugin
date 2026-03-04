@@ -31,12 +31,12 @@ class AHPPlugin:
         self.action.setStatusTip(self.tr('Abre a Calculadora de Pesos AHP'))
         self.action.triggered.connect(self.run)
 
+        self.iface.addPluginToMenu("Ferramentas Geo", self.action)
         self.iface.addToolBarIcon(self.action)
-        self.iface.addPluginToMenu(self.tr('&Calculadora AHP'), self.action)
 
     def unload(self):
         """Remove o plugin do menu e barra de ferramentas."""
-        self.iface.removePluginMenu(self.tr('&Calculadora AHP'), self.action)
+        self.iface.removePluginMenu("Ferramentas Geo", self.action)
         self.iface.removeToolBarIcon(self.action)
         del self.action
 
