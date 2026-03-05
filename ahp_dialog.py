@@ -121,6 +121,7 @@ class AHPDialog(QDialog):
         self.criteria = []
         self.calculator = None
         self.last_results = None
+        self.matrix_combos = {}
 
         self.setWindowTitle("Calculadora AHP – Analytic Hierarchy Process")
         self.setMinimumSize(900, 680)
